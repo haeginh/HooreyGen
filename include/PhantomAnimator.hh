@@ -10,9 +10,10 @@
 
 #include <igl/readTGF.h>
 #include <igl/writeTGF.h>
-#include <igl/readDMAT.h>
 #include <igl/writeDMAT.h>
 #include <igl/writeMESH.h>
+#include <igl/writePLY.h>
+#include <igl/readDMAT.h>
 #include <igl/readMESH.h>
 #include <igl/readPLY.h>
 #include <igl/directed_edge_parents.h>
@@ -28,7 +29,7 @@
 #include <igl/Timer.h>
 #include <igl/mat_max.h>
 #include <igl/arap.h>
-#include <igl/shortest_edge_and_midpoint.h>
+#include <igl/copyleft/cgal/SelfIntersectMesh.h>
 
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
@@ -44,11 +45,18 @@ public:
     ~PhantomAnimator();
 
     bool ReadFiles(string prefix);
-    bool ReadOBJ(string fileName);
-    bool ReadOBJW(string fileName);
-    bool SetSimpleF(int, bool onlyV = false);
-    VectorXd GetWeight(int i, int col);
-    void Animate(RotationList vQ, MatrixXd &CT, MatrixXi &BET);
+    bool CalculateWeights(double w_smooth);
+    bool WriteWeights(string prefix)
+    {
+        igl::writeDMAT(prefix + ".W", W, false);
+        igl::writeDMAT(prefix + ".S", smoothMM, false);
+        return true;
+    }
+    bool ReadW(string prefix);
+
+    VectorXd GetWeight(int col) { return W.col(col); }
+    void Animate(RotationList vQ);
+    void AnimateDQS(RotationList vQ);
 
     void GetMeshes(MatrixXd &_V, MatrixXi &_F, MatrixXd &_C, MatrixXi &_BE)
     {
@@ -61,77 +69,108 @@ public:
     MatrixXi GetF() { return F; }
     MatrixXd GetC() { return C; }
     MatrixXi GetBE() { return BE; }
+    VectorXi GetP() { return P; }
 
-    MatrixXd GetV_simple() { return V_simple; }
-    MatrixXi GetF_simple() { return F_simple; }
-
-    void PreComputeSmooth()
+    void PreComputeAdjacent()
     {
-        smoothingM.clear();
-        double epsilon(1e-5);
-        bw = VectorXd::Zero(extractedVertices[125].size());
-        for (int i = 0; i < extractedVertices[125].size(); i++)
+        for (int i = 0; i < F.rows(); i++)
         {
-            int v = extractedVertices[125][i];
-            if (cleanWeights[v].find(3)->second > epsilon || cleanWeights[v].find(4)->second > epsilon)
-            {
-                smoothingM[i] = {};
-                bw(i) = 1;
-            }
+            adjacent[F(i, 0)].push_back(F(i, 1));
+            adjacent[F(i, 0)].push_back(F(i, 2));
+            adjacent[F(i, 1)].push_back(F(i, 0));
+            adjacent[F(i, 1)].push_back(F(i, 2));
+            adjacent[F(i, 2)].push_back(F(i, 1));
+            adjacent[F(i, 2)].push_back(F(i, 0));
         }
-
-        for (int i = 0; i < F_simple.rows(); i++)
+        for (auto &iter : adjacent)
         {
-            if (smoothingM.find(F_simple(i, 0)) != smoothingM.end())
-            {
-                smoothingM[F_simple(i, 0)].push_back(F_simple(i, 1));
-                smoothingM[F_simple(i, 0)].push_back(F_simple(i, 2));
-            }
-            if (smoothingM.find(F_simple(i, 1)) != smoothingM.end())
-            {
-                smoothingM[F_simple(i, 1)].push_back(F_simple(i, 0));
-                smoothingM[F_simple(i, 1)].push_back(F_simple(i, 2));
-            }
-            if (smoothingM.find(F_simple(i, 2)) != smoothingM.end())
-            {
-                smoothingM[F_simple(i, 2)].push_back(F_simple(i, 1));
-                smoothingM[F_simple(i, 2)].push_back(F_simple(i, 0));
-            }
+            sort(iter.second.begin(), iter.second.end());
+            iter.second.erase(unique(iter.second.begin(), iter.second.end()), iter.second.end());
         }
     }
 
-    void LaplacianSmooth(int iterNum, double w)
+    enum JOINT{SHOULDER, ELBOW, WRIST};
+    void LaplacianSmooth(JOINT j, int iterNum) //all
     {
         for (int i = 0; i < iterNum; i++)
         {
-            for (auto iter : smoothingM)
+            for (auto iter : smoothM[(int)j])
             {
-                Vector3d target(0,0,0);
-                for(int v:iter.second)
-                    target += V_simple.row(v);
-                target /= (double) iter.second.size();
-                V_simple.row(iter.first) = V_simple.row(iter.first).transpose()*(1-w) + target*w;
+                Vector3d v(0, 0, 0);
+                for (auto iter2 : iter.second)
+                {
+                    v += V.row(iter2.first) * iter2.second;
+                }
+                V.row(iter.first) = v;
             }
         }
     }
 
+    VectorXd GetSmoothW(JOINT j)
+    {
+        return smoothMM.col((int)j);
+    }
+
+    void ReleaseRest(double w = 1.)
+    {
+        MatrixXd U0 = V0.array().colwise() * W.col(0).array() * w;
+        MatrixXd U = V.array().colwise() * (1 - W.col(0).array() * w);
+        V = U0 + U;
+    }
+
+    void ArmOffSet(MatrixXd normalsV, double w = 0.1)
+    {
+        VectorXd arms = W.col(2) + W.col(6);
+        arms = arms.array().pow(3);
+        double e(1e-3);
+        for (int i = 0; i < V.rows(); i++)
+        {
+            if (arms(i) < e)
+                continue;
+            V.row(i) += normalsV.row(i) * arms(i) * w;
+        }
+    }
+
+    void InitializeV()
+    {
+        V = V0;
+        C = C0;
+    }
+
+    void ReadPLY(){
+        plyV.resize(8);
+        plyF.resize(8);
+        for(int i=1;i<9;i++)
+            igl::readPLY(std::to_string(i) + ".ply", plyV[i-1], plyF[i-1]);
+    }
+
+    void WritePLY(){
+        for(int i=1;i<9;i++)
+            igl::writePLY(std::to_string(i) + "1.ply", plyV[i-1], plyF[i-1]);
+    }
     //variables
 private:
-    MatrixXd C, V, V_simple, V0;
-    MatrixXi BE, F, F_simple;
+    MatrixXd C, C0, V, V0;
+    MatrixXi BE, BE0, F;
     VectorXi P;
+
+    //dqs
     vector<map<int, double>> cleanWeights;
-    map<int, pair<int, int>> shells;
-    map<int, vector<int>> extractedVertices;
 
     //LBS
-    MatrixXd M;
+    MatrixXd W;
 
     //smoothing
-    map<int, vector<int>> smoothingM;
+    map<int, vector<int>> adjacent;
+    vector<map<int, map<int, double>>> smoothM;
+    MatrixXd smoothMM;
 
-public:
-    VectorXd bw;
+    map<int, vector<int>> adjacent_T;
+
+    //bone ply
+    vector<MatrixXd> plyV;
+    vector<MatrixXd> plyF;
+
 };
 
 #endif

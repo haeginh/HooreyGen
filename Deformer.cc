@@ -4,7 +4,7 @@
 
 #include "PhantomAnimator.hh"
 #include "igl/opengl/glfw/Viewer.h"
-#include "igl/writePLY.h"
+
 #define PI 3.14159265358979323846
 
 void PrintUsage()
@@ -28,105 +28,145 @@ int main(int argc, char **argv)
 
     Eigen::RowVector3d sea_green(70. / 255., 252. / 255., 167. / 255.);
     igl::opengl::glfw::Viewer viewer;
-    int selected(0);
-    vector<int> appended = {125};
-    phantom->SetSimpleF(appended[0]);
-    phantom->PreComputeSmooth();
-    viewer.data().set_mesh(phantom->GetV_simple(), phantom->GetF_simple());
+
+    viewer.data().set_mesh(phantom->GetV(), phantom->GetF());
     viewer.data().clear_labels();
-    viewer.data().set_data(phantom->bw);
-    //  viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-    RotationList vQ(22, Quaterniond::Identity());
+    viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
+
+    viewer.data().show_overlay_depth = false;
+    RotationList vQ(9, Quaterniond::Identity());
+    vQ[5] = Quaterniond(AngleAxisd(20 * PI / 180., Vector3d(0, 1, 0)));  //Right shoulder
+    vQ[1] = Quaterniond(AngleAxisd(-20 * PI / 180., Vector3d(0, 1, 0))); //Left shoulder
+    vQ[6] = Quaterniond(AngleAxisd(130 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(-35 * PI / 180., Vector3d(0, 0, 1))) * Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0)));
+    vQ[2] = Quaterniond(AngleAxisd(-130 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(35 * PI / 180., Vector3d(0, 0, 1))) * Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0)));
+    vQ[7] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0))) * Quaterniond(AngleAxisd(60 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(-20 * PI / 180., Vector3d(0, 0, 1)));
+    vQ[3] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0))) * Quaterniond(AngleAxisd(-60 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(20 * PI / 180., Vector3d(0, 0, 1)));
+    vQ[8] = Quaterniond(AngleAxisd(-45 * PI / 180., Vector3d(0, 0, 1)));
+    vQ[4] = Quaterniond(AngleAxisd(45 * PI / 180., Vector3d(0, 0, 1)));
+
+    AngleAxisd aa6 = AngleAxisd(vQ[6]);
+    AngleAxisd aa2 = AngleAxisd(vQ[2]);
+
+    int selected(0);
+    if (!phantom->ReadW(string(argv[1])))
+    {
+        phantom->CalculateWeights(0.1);
+        phantom->WriteWeights(string(argv[1]));
+    }
+    phantom->ReadPLY();
     viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
     {
-        int idx, itNum(-1);
-        double degree, weight(-1.);
-        MatrixXd CT;
-        MatrixXi BET;
+        int idx, itNum;
+        double f;
+        RotationList vQ1(9, Quaterniond::Identity());
         switch (key)
         {
-        case '.':
-            selected++;
-            selected = std::min(std::max(selected, 0), (int)phantom->GetBE().rows() - 1);
-            for (int i = 0; i < appended.size(); i++)
-                viewer.data_list[i].set_data(phantom->GetWeight(appended[i], selected));
-            break;
-        case ',':
-            selected--;
-            selected = std::min(std::max(selected, 0), (int)phantom->GetBE().rows() - 1);
-            for (int i = 0; i < appended.size(); i++)
-            {
-                viewer.data_list[i].set_data(phantom->GetWeight(appended[i], selected));
-            }
-            break;
-        case 'S':
-            cout << "set id: " << flush;
-            cin >> idx;
-            phantom->SetSimpleF(idx);
-            for (auto &data : viewer.data_list)
-                data.clear();
-            viewer.data_list.resize(1);
-            viewer.selected_data_index = 0;
-            appended = {idx};
-            viewer.data().set_mesh(phantom->GetV_simple(), phantom->GetF_simple());
-            //  viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-            viewer.data().set_data(phantom->GetWeight(idx, selected));
-            viewer.data().set_visible(true);
-            viewer.data().clear_labels();
-            break;
-        case 'A':
-            cout << "append id: " << flush;
-            cin >> idx;
-            phantom->SetSimpleF(idx);
-            viewer.append_mesh();
-            viewer.data().set_mesh(phantom->GetV_simple(), phantom->GetF_simple());
-            viewer.data().set_data(phantom->GetWeight(idx, selected));
-            viewer.data().clear_labels();
-            appended.push_back(idx);
-            break;
-        case 'R':
-            cout << "arm degree: " << flush;
-            cin >> degree;
-            vQ[11] = Quaterniond(AngleAxisd(degree * PI / 180., Vector3d(0, 1, 0))); //Right shoulder
-            vQ[4] = Quaterniond(AngleAxisd(-degree * PI / 180., Vector3d(0, 1, 0))); //Left shoulder
-            vQ[10] = Quaterniond(AngleAxisd(10 * PI / 180., Vector3d(0, 1, 0)));     //Right shoulder
-            vQ[3] = Quaterniond(AngleAxisd(-10 * PI / 180., Vector3d(0, 1, 0)));     //Left shoulder
-
-            vQ[11] = vQ[11] * Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(0, 0, 1))) * Quaterniond(AngleAxisd(-20 * PI / 180., Vector3d(1, 0, 0)));
-            vQ[4] = vQ[4] * Quaterniond(AngleAxisd(30 * PI / 180., Vector3d(0, 0, 1))) * Quaterniond(AngleAxisd(-20 * PI / 180., Vector3d(1, 0, 0)));
-            vQ[12] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0))) * Quaterniond(AngleAxisd(70 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(0, 0, 1)));
-            vQ[5] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0))) * Quaterniond(AngleAxisd(-70 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(30 * PI / 180., Vector3d(0, 0, 1)));
-            vQ[13] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(0, 0, 1)));
-            vQ[6] = Quaterniond(AngleAxisd(30 * PI / 180., Vector3d(0, 0, 1)));
+        case 'C':
+            phantom->CalculateWeights(0.1);
+        case '0': //elbow & wrist
+            vQ1[3] = vQ[3];
+            vQ1[4] = vQ[4];
+            vQ1[7] = vQ[7];
+            vQ1[8] = vQ[8];
             cout << "deforming..." << flush;
-            phantom->Animate(vQ, CT, BET);
+            phantom->AnimateDQS(vQ1);
             cout << "done" << endl;
-
-            phantom->SetSimpleF(125, true);
-            viewer.data().set_vertices(phantom->GetV_simple());
-            // for (int i = 0; i < appended.size(); i++)
-            // {
-            //     phantom->SetSimpleF(appended[i], true);
-            //     viewer.data_list[i].set_vertices(phantom->GetV_simple());
-            // }
-            //viewer.data().show_overlay_depth = true;
-            //  viewer.data_list.back().set_edges(CT, BET, sea_green);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
+            break;
+        case '1': //shoulder
+            cout << "degree: " << flush;
+            cin >> f;
+            vQ1[6] = Quaterniond(AngleAxisd(f * PI / 180., aa6.axis()));
+            vQ1[2] = Quaterniond(AngleAxisd(f * PI / 180., aa2.axis()));
+            cout << "deforming..." << flush;
+            //viewer.data().set_data(phantom->GetSmoothW());
+            phantom->Animate(vQ1);
+            cout << "done" << endl;
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
+            break;
+        case '2': //scapulae
+            vQ1[5] = vQ[5];
+            vQ1[1] = vQ[1];
+            cout << "deforming..." << flush;
+            //viewer.data().set_data(phantom->GetSmoothW());
+            phantom->Animate(vQ1);
+            cout << "done" << endl;
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
+            break;
+        case '3': //shoulder front (optional, only slight move)
+            cout << "degree: " << flush;
+            cin >> f;
+            vQ1[5] = Quaterniond(AngleAxisd(f * PI / 180., Vector3d(1., 0., 0.)));
+            vQ1[1] = Quaterniond(AngleAxisd(f * PI / 180., Vector3d(1., 0., 0.)));
+            cout << "deforming..." << flush;
+            //viewer.data().set_data(phantom->GetSmoothW());
+            phantom->AnimateDQS(vQ1);
+            cout << "done" << endl;
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
+            break;
+        case '4': //shoulder front
+            phantom->ArmOffSet(viewer.data().V_normals, 0.1);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            break;
+        case 'Q':
+            cout << "iter num: " << flush;
+            cin >> idx;
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::WRIST, idx);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
             break;
         case 'W':
-            cout << "smooth mesh (1) iterating num: " << flush; cin>>itNum;
-            cout << "smooth mesh (1) weight: " << flush; cin>>weight;
-            cout << "performing smoothing process.."<<flush;
-            if(itNum<0) itNum = 10;
-            if(weight<0) weight = 0.01;
-            phantom->LaplacianSmooth(itNum, weight);
-            cout << "done" << endl;
-            viewer.data().set_vertices(phantom->GetV_simple());
-            //viewer.data().show_overlay_depth = true;
-            //  viewer.data_list.back().set_edges(CT, BET, sea_green);
+            cout << "iter num: " << flush;
+            cin >> idx;
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::ELBOW, idx);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            break;
+        case 'E':
+            cout << "iter num: " << flush;
+            cin >> idx;
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, idx);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            break;
+        case 'I':
+            phantom->InitializeV();
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            break;
+        case 'S':
+            phantom->ReleaseRest();
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
             break;
         case 'P':
-            phantom->SetSimpleF(126);
-            igl::writePLY("skin.ply", phantom->GetV_simple(), phantom->GetF_simple());
+            igl::writePLY("skin.ply", phantom->GetV(), phantom->GetF());
+            phantom->WritePLY();
+            break;
+        case ',':
+            selected = min(max(--selected, 0), 8);
+            viewer.data().set_data(phantom->GetWeight(selected));
+            break;
+        case '.':
+            selected = min(max(++selected, 0), 8);
+            viewer.data().set_data(phantom->GetWeight(selected));
+            break;
+        case '[':
+            selected = min(max(--selected, 0), 3);
+            viewer.data().set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
+            break;
+        case ']':
+            selected = min(max(++selected, 0), 3);
+            viewer.data().set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
             break;
         }
         return true;
