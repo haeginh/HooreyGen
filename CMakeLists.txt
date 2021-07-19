@@ -19,7 +19,6 @@ option(LIBIGL_WITH_OPENGL            "Use OpenGL"         ON)
 option(LIBIGL_WITH_OPENGL_GLFW       "Use GLFW"           ON)
 option(LIBIGL_WITH_OPENGL_GLFW_IMGUI "Use imgui"           ON)
 option(LIBIGL_WITH_TETGEN            "Use TetGen"         ON)
-option(LIBIGL_WITH_CGAL              "Use CGAL"         ON)
 find_package(LIBIGL REQUIRED QUIET)
 set(LIBIGL_DIR ${LIBIGL_INCLUDE_DIR}/..)
 
@@ -43,5 +42,4 @@ target_link_libraries(Deformer
     igl::opengl
     igl::opengl_glfw_imgui
     igl::tetgen
-    igl::cgal
     )
