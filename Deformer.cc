@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         phantom->CalculateWeights(0.1);
         phantom->WriteWeights(string(argv[1]));
     }
-    phantom->ReadPLY();
+
     viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
     {
         int idx, itNum;
@@ -150,7 +150,6 @@ int main(int argc, char **argv)
             break;
         case 'P':
             igl::writePLY("skin.ply", phantom->GetV(), phantom->GetF());
-            phantom->WritePLY();
             break;
         case ',':
             selected = min(max(--selected, 0), 8);

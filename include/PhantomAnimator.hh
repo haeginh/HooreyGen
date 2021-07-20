@@ -137,17 +137,6 @@ public:
         C = C0;
     }
 
-    void ReadPLY(){
-        plyV.resize(8);
-        plyF.resize(8);
-        for(int i=1;i<9;i++)
-            igl::readPLY(std::to_string(i) + ".ply", plyV[i-1], plyF[i-1]);
-    }
-
-    void WritePLY(){
-        for(int i=1;i<9;i++)
-            igl::writePLY(std::to_string(i) + "1.ply", plyV[i-1], plyF[i-1]);
-    }
     //variables
 private:
     MatrixXd C, C0, V, V0;
@@ -166,11 +155,6 @@ private:
     MatrixXd smoothMM;
 
     map<int, vector<int>> adjacent_T;
-
-    //bone ply
-    vector<MatrixXd> plyV;
-    vector<MatrixXd> plyF;
-
 };
 
 #endif

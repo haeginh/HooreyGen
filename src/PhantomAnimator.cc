@@ -236,50 +236,24 @@ void PhantomAnimator::Animate(RotationList vQ)
     igl::forward_kinematics(C, BE, P, vQ, T);
     for (int e = 0; e < BE.rows(); e++)
     {
-        Matrix4d t;
-        t << T.block(e * 4, 0, 4, 3).transpose(), 0, 0, 0, 0;
-        Affine3d a;
-        a.matrix() = t;
-        C.row(BE(e, 1)) = a * Vector3d(C.row(BE(e, 1)));
-        if(e>0 && e<8)
-        {
-            MatrixXd m = plyV[e-1].rowwise().homogeneous() * a.matrix().transpose();
-            plyV[e-1].col(0) = m.col(0);
-            plyV[e-1].col(1) = m.col(1);
-            plyV[e-1].col(2) = m.col(2);
-        }
+        C.row(BE(e, 1)) = C.row(BE(e, 1)).homogeneous() * T.block(e * 4, 0, 4, 3);// a * Vector3d(C.row(BE(e, 1)));
     }
 
     igl::lbs_matrix(V, W, M);
     V = M * T;
-
-    //     vector<Vector3d> vT;
-    // igl::forward_kinematics(C,BE, P, vQ, vQ, vT);
-    // myDqs(V0, cleanWeights, vQ, vT, V);
 }
 
 void PhantomAnimator::AnimateDQS(RotationList vQ)
 {
+    MatrixXd T;
+    igl::forward_kinematics(C, BE, P, vQ, T);
+
     vector<Vector3d> vT;
     igl::forward_kinematics(C, BE, P, vQ, vQ, vT);
     myDqs(V, cleanWeights, vQ, vT, V);
 
-    MatrixXd T;
-    igl::forward_kinematics(C, BE, P, vQ, T);
     for (int e = 0; e < BE.rows(); e++)
-    {
-        Matrix4d t;
-        t << T.block(e * 4, 0, 4, 3).transpose(), 0, 0, 0, 0;
-        Affine3d a;
-        a.matrix() = t;
-        C.row(BE(e, 1)) = a * Vector3d(C.row(BE(e, 1)));
-        //cout<<t<<endl; getchar();
-        if(e>0 && e<8)
-        {
-            MatrixXd m = plyV[e-1].rowwise().homogeneous() * a.matrix().transpose();
-            plyV[e-1].col(0) = m.col(0);
-            plyV[e-1].col(1) = m.col(1);
-            plyV[e-1].col(2) = m.col(2); 
-        }
+    {  
+        C.row(BE(e, 1)) = C.row(BE(e, 1)).homogeneous() * T.block(e * 4, 0, 4, 3);
     }
 }
