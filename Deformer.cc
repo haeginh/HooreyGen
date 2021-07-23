@@ -40,9 +40,6 @@ int main(int argc, char **argv)
         ifs>>vQ[i].w()>>vQ[i].x()>>vQ[i].y()>>vQ[i].z();
     ifs.close();
 
-    AngleAxisd aa6 = AngleAxisd(vQ[6]);
-    AngleAxisd aa2 = AngleAxisd(vQ[2]);
-
     int selected(0);
     if (!phantom->ReadW(string(argv[1])))
     {
@@ -55,113 +52,71 @@ int main(int argc, char **argv)
         int idx, itNum;
         double f;
         RotationList vQ1(9, Quaterniond::Identity());
+        bool update(false);
         switch (key)
         {
-        case 'C':
+        case '1': //elbow & wrist
+            cout << "Deformation + Smoothing (1)..." << flush;
+            vQ1 = vQ;
+            vQ1[6] = Quaterniond(AngleAxisd(80. * PI / 180., AngleAxisd(vQ[6]).axis()));
+            vQ1[2] = Quaterniond(AngleAxisd(80. * PI / 180., AngleAxisd(vQ[2]).axis()));
+            phantom->AnimateDQS(vQ1);
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::WRIST, 5);
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::ELBOW, 15);
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
+            cout << "done" << endl;
+            update = true;
+            break;
+        case '2': //elbow & wrist
+            cout << "Deformation + Smoothing + Recovering (2)..." << flush;
+            vQ1[6] = Quaterniond(AngleAxisd(50. * PI / 180., AngleAxisd(vQ[6]).axis()));
+            vQ1[2] = Quaterniond(AngleAxisd(50. * PI / 180., AngleAxisd(vQ[2]).axis()));
+            phantom->AnimateDQS(vQ1);
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
+            phantom->ReleaseRest();
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
+            phantom->ReleaseRest();
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 200);
+            cout << "done" << endl;
+            update = true;
+            break;
+        case '3':
             phantom->CalculateWeights(0.1);
             break;
-        case '0': //elbow & wrist
-            vQ1[3] = vQ[3];
-            vQ1[4] = vQ[4];
-            vQ1[7] = vQ[7];
-            vQ1[8] = vQ[8];
-            cout << "deforming..." << flush;
-            phantom->AnimateDQS(vQ1);
-            cout << "done" << endl;
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-            break;
-        case '1': //shoulder
-            cout << "degree: " << flush;
-            cin >> f;
-            vQ1[6] = Quaterniond(AngleAxisd(f * PI / 180., aa6.axis()));
-            vQ1[2] = Quaterniond(AngleAxisd(f * PI / 180., aa2.axis()));
-            cout << "deforming..." << flush;
-            //viewer.data().set_data(phantom->GetSmoothW());
-            phantom->Animate(vQ1);
-            cout << "done" << endl;
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-            break;
-        case '2': //scapulae
-            vQ1[5] = vQ[5];
-            vQ1[1] = vQ[1];
-            cout << "deforming..." << flush;
-            //viewer.data().set_data(phantom->GetSmoothW());
-            phantom->Animate(vQ1);
-            cout << "done" << endl;
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-            break;
-        case '3': //shoulder front (optional, only slight move)
-            cout << "degree: " << flush;
-            cin >> f;
-            vQ1[5] = Quaterniond(AngleAxisd(f * PI / 180., Vector3d(1., 0., 0.)));
-            vQ1[1] = Quaterniond(AngleAxisd(f * PI / 180., Vector3d(1., 0., 0.)));
-            cout << "deforming..." << flush;
-            //viewer.data().set_data(phantom->GetSmoothW());
-            phantom->AnimateDQS(vQ1);
-            cout << "done" << endl;
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-            break;
-        case '4': //offset
-            phantom->ArmOffSet(viewer.data().V_normals, 0.1);
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            break;
-        case '5': //shoulder up
+
+        case '4': //shoulder up
             cout << "deforming..." << flush;
             //viewer.data().set_data(phantom->GetSmoothW());
             //phantom->WeackenUpperArm();
             vQ1[5] = Quaterniond(AngleAxisd(5 * PI / 180., Vector3d(0, 1, 0)));
             vQ1[1] = Quaterniond(AngleAxisd(-5 * PI / 180., Vector3d(0, 1, 0)));
             phantom->Animate(vQ1, true);
-            //phantom->ShoulderUp(viewer.data().V_normals, 0.1);
-            cout << "done" << endl;
+            phantom->Animate(vQ1, true);
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            break;
-        case '6': //offset
-            phantom->ShoulderUp(viewer.data().V_normals, 0.1);
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            break;
-        case 'Q':
-            cout << "iter num: " << flush;
-            cin >> idx;
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::WRIST, idx);
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            break;
-        case 'W':
-            cout << "iter num: " << flush;
-            cin >> idx;
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::ELBOW, idx);
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            break;
-        case 'E':
-            cout << "iter num: " << flush;
-            cin >> idx;
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, idx);
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            break;
-        case 'I':
-            phantom->InitializeV();
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            break;
-        case 'S':
+            phantom->ShoulderUp(viewer.data().V_normals, 0.3);
             phantom->ReleaseRest();
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
+            phantom->Animate(vQ1, true);
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
+            phantom->ShoulderUp(viewer.data().V_normals, 0.3);
+            phantom->ReleaseRest();
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
+            phantom->Animate(vQ1, true);
+            phantom->ReleaseRest();
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 150);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            phantom->ShoulderUp(viewer.data().V_normals, 0.2);
+            phantom->ReleaseRest();
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);
+            phantom->ArmOffSet(viewer.data().V_normals, 0.3);
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);
+            cout << "done" << endl;
+            update = true;
             break;
+ 
         case 'P':
             igl::writePLY("skin.ply", phantom->GetV(), phantom->GetF());
             break;
@@ -181,6 +136,12 @@ int main(int argc, char **argv)
             selected = min(max(++selected, 0), 3);
             viewer.data().set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
             break;
+        }
+        if(update)
+        {
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
         }
         return true;
     };
