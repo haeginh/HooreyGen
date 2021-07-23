@@ -32,23 +32,14 @@ int main(int argc, char **argv)
     viewer.data().set_mesh(phantom->GetV(), phantom->GetF());
     viewer.data().clear_labels();
     viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
-
     viewer.data().show_overlay_depth = false;
-    RotationList vQ(9, Quaterniond::Identity());
-    vQ[5] = Quaterniond(AngleAxisd(20 * PI / 180., Vector3d(0, 1, 0)));  //Right shoulder
-    vQ[1] = Quaterniond(AngleAxisd(-20 * PI / 180., Vector3d(0, 1, 0))); //Left shoulder
-    vQ[6] = Quaterniond(AngleAxisd(130 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(-35 * PI / 180., Vector3d(0, 0, 1))) * Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0)));
-    vQ[2] = Quaterniond(AngleAxisd(-130 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(35 * PI / 180., Vector3d(0, 0, 1))) * Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0)));
-    vQ[7] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0))) * Quaterniond(AngleAxisd(60 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(-20 * PI / 180., Vector3d(0, 0, 1)));
-    vQ[3] = Quaterniond(AngleAxisd(-30 * PI / 180., Vector3d(1, 0, 0))) * Quaterniond(AngleAxisd(-60 * PI / 180., Vector3d(0, 1, 0))) * Quaterniond(AngleAxisd(20 * PI / 180., Vector3d(0, 0, 1)));
-    vQ[8] = Quaterniond(AngleAxisd(-45 * PI / 180., Vector3d(0, 0, 1)));
-    vQ[4] = Quaterniond(AngleAxisd(45 * PI / 180., Vector3d(0, 0, 1)));
 
-    ofstream ofs("hoorey.txt");
+    RotationList vQ(9, Quaterniond::Identity());
+    ifstream ifs("hoorey.txt");
     for(int i=0;i<vQ.size();i++)
-    {
-        ofs<<vQ[i].w()<<" "<<vQ[i].x()<<" "<<vQ[i].y()<<" "<<vQ[i].z()<<endl;
-    }ofs.close();
+        ifs>>vQ[i].w()>>vQ[i].x()>>vQ[i].y()>>vQ[i].z();
+    ifs.close();
+
     AngleAxisd aa6 = AngleAxisd(vQ[6]);
     AngleAxisd aa2 = AngleAxisd(vQ[2]);
 
