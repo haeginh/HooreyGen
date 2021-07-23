@@ -49,8 +49,7 @@ int main(int argc, char **argv)
 
     viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
     {
-        int idx, itNum;
-        double f;
+        double vol;
         RotationList vQ1(9, Quaterniond::Identity());
         bool update(false);
         switch (key)
@@ -94,13 +93,13 @@ int main(int argc, char **argv)
             phantom->Animate(vQ1, true);
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderUp(viewer.data().V_normals, 0.3);
+            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);
             phantom->ReleaseRest();
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
             phantom->Animate(vQ1, true);
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderUp(viewer.data().V_normals, 0.3);
+            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);
             phantom->ReleaseRest();
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
             phantom->Animate(vQ1, true);
@@ -108,15 +107,19 @@ int main(int argc, char **argv)
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 150);
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderUp(viewer.data().V_normals, 0.2);
+            phantom->ShoulderOffset(viewer.data().V_normals, 0.2);
             phantom->ReleaseRest();
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);
-            phantom->ArmOffSet(viewer.data().V_normals, 0.3);
+            phantom->ArmOffset(viewer.data().V_normals, 0.3);
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);
             cout << "done" << endl;
             update = true;
             break;
  
+        case 'V':
+            vol = phantom->GetVolume();
+            cout<<"current volume : "<<vol<<" / "<<phantom->GetVolume(true)<<" ("<<vol/phantom->GetVolume(true) * 100.f<<"%)"<<endl;
+            break;
         case 'P':
             igl::writePLY("skin.ply", phantom->GetV(), phantom->GetF());
             break;

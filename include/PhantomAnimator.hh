@@ -38,8 +38,14 @@
 class Viewer;
 class PhantomAnimator
 {
-    //functions
 public:
+    enum JOINT
+    {
+        SHOULDER,
+        ELBOW,
+        WRIST
+    };
+
     PhantomAnimator();
     PhantomAnimator(string prefix);
     ~PhantomAnimator();
@@ -70,6 +76,14 @@ public:
     MatrixXd GetC() { return C; }
     MatrixXi GetBE() { return BE; }
     VectorXi GetP() { return P; }
+    VectorXd GetSmoothW(JOINT j)
+    {
+        return smoothMM.col((int)j);
+    }
+    double GetVolume(bool initial = false){
+        if(initial) return volume0;
+        return CalculateVolume(V, F);
+    }
 
     void PreComputeAdjacent()
     {
@@ -89,7 +103,7 @@ public:
         }
     }
 
-    enum JOINT{SHOULDER, ELBOW, WRIST};
+
     void LaplacianSmooth(JOINT j, int iterNum) //all
     {
         for (int i = 0; i < iterNum; i++)
@@ -106,11 +120,6 @@ public:
         }
     }
 
-    VectorXd GetSmoothW(JOINT j)
-    {
-        return smoothMM.col((int)j);
-    }
-
     void ReleaseRest(double w = 1.)
     {
         MatrixXd U0 = V0.array().colwise() * W.col(0).array() * w;
@@ -118,7 +127,7 @@ public:
         V = U0 + U;
     }
 
-    void ArmOffSet(MatrixXd normalsV, double w = 0.1)
+    void ArmOffset(MatrixXd normalsV, double w = 0.1)
     {
         VectorXd arms = W.col(2) + W.col(6);
         //arms = arms.array().pow(3);
@@ -131,13 +140,7 @@ public:
         }
     }
 
-    void InitializeV()
-    {
-        V = V0;
-        C = C0;
-    }
-
-    void ShoulderUp(MatrixXd normalsV, double w = 0.1)
+    void ShoulderOffset(MatrixXd normalsV, double w = 0.1)
     {
         VectorXd up = smoothMM.col(JOINT::SHOULDER);
         up /= up.array().maxCoeff();
@@ -150,17 +153,32 @@ public:
             V.row(i) += normalsV.row(i) * up(i) * w;
         }
     }
-    void WeackenUpperArm()
+
+    void InitializeV()
     {
-        W.col(2) = W.col(2)*0.5;
-        W.col(6) = W.col(6)*0.5;
-        igl::normalize_row_sums(W, W);
+        V = V0;
+        C = C0;
     }
-    //variables
+
 private:
+    double CalculateVolume(const MatrixXd &V1, const MatrixXi &F1)
+    {
+        Eigen::MatrixXd V2(V1.rows() + 1, V1.cols());
+        V2.topRows(V1.rows()) = V;
+        V2.bottomRows(1).setZero();
+        Eigen::MatrixXi T(F.rows(), 4);
+        T.leftCols(3) = F;
+        T.rightCols(1).setConstant(V.rows());
+        Eigen::VectorXd vol;
+        igl::volume(V2, T, vol);
+        return std::abs(vol.sum());
+    }
+
+    //variables
     MatrixXd C, C0, V, V0;
     MatrixXi BE, BE0, F;
     VectorXi P;
+    double volume0;
 
     //dqs
     vector<map<int, double>> cleanWeights;

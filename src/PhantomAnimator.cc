@@ -6,6 +6,7 @@ PhantomAnimator::PhantomAnimator(string prefix)
 {
     ReadFiles(prefix);
     PreComputeAdjacent();
+    volume0 = CalculateVolume(V0, F);
     //CalculateWeights(0.1);
 }
 
@@ -107,34 +108,6 @@ bool PhantomAnimator::CalculateWeights(double w_smooth, bool boneOnly)
     smoothMM.col(2) = WJ.col(3).array().pow(3) + WJ.col(6).array().pow(3);
     cout << endl;
 
-    int selected = 0;
-    // Eigen::RowVector3d sea_green(70. / 255., 252. / 255., 167. / 255.);
-    // igl::opengl::glfw::Viewer viewer;
-    // viewer.data().set_mesh(V, F);
-    // viewer.data().set_data(smoothMM.col(0));
-    // viewer.data().set_edges(C, BE, sea_green);
-    // viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
-    // {
-    //     switch (key)
-    //     {
-    //     case '.':
-    //         selected++;
-    //         selected = std::min(std::max(selected, 0), (int)W.cols() - 1);
-    //         viewer.data().set_data(W.col(selected));
-    //         break;
-    //     case ',':
-    //         selected--;
-    //         selected = std::min(std::max(selected, 0), (int)W.cols() - 1);
-    //         viewer.data().set_data(W.col(selected));
-    //         break;
-    //     case '[':
-    //         viewer.data().set_data(smoothMM.col(1));
-    //         break;
-    //     }
-    //     return true;
-    // };
-    // viewer.launch();
-
     double epsilon = 1e-5;
     smoothMM *= w_smooth;
     cleanWeights.clear();
@@ -201,30 +174,7 @@ bool PhantomAnimator::ReadW(string prefix)
         }
         cleanWeights.push_back(weight);
     }
-    // ifstream ifs(prefix + ".W");
-    // if (!ifs.is_open())
-    //     return false;
-    // string aLine;
-    // cleanWeights.clear();
-    // while (getline(ifs, aLine))
-    // {
-    //     if (aLine.length() == 0)
-    //         continue;
-    //     stringstream ss(aLine);
-    //     int num;
-    //     ss >> num;
-    //     map<int, double> weight;
-    //     for (int i = 0; i < num; i++)
-    //     {
-    //         int idx;
-    //         double w;
-    //         ss >> idx >> w;
-    //         weight[idx] = w;
-    //     }        igl::writeDMAT(prefix + ".W", W, false);
 
-    //     cleanWeights.push_back(weight);
-    // }
-    // ifs.close();
     return true;
 }
 
