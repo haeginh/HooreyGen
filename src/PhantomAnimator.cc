@@ -25,7 +25,7 @@ bool PhantomAnimator::ReadFiles(string prefix)
     return true;
 }
 
-bool PhantomAnimator::CalculateWeights(double w_smooth)
+bool PhantomAnimator::CalculateWeights(double w_smooth, bool boneOnly)
 {
     //perform BBW
     MatrixXd boneP = GenerateBonePoints(C, BE0, 1.);
@@ -53,7 +53,7 @@ bool PhantomAnimator::CalculateWeights(double w_smooth)
     MatrixXd WT;
     if (!igl::bbw(VT, TT, b, bc, bbw_data, WT))
         return EXIT_FAILURE;
-
+    
     cout << "<Calculate Joint Weights>" << endl;
     vector<int> jn(C.rows(), 0);
     jn[4] = 1;
@@ -108,32 +108,32 @@ bool PhantomAnimator::CalculateWeights(double w_smooth)
     cout << endl;
 
     int selected = 0;
-    Eigen::RowVector3d sea_green(70. / 255., 252. / 255., 167. / 255.);
-    igl::opengl::glfw::Viewer viewer;
-    viewer.data().set_mesh(V, F);
-    viewer.data().set_data(smoothMM.col(0));
-    viewer.data().set_edges(C, BE, sea_green);
-    viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
-    {
-        switch (key)
-        {
-        case '.':
-            selected++;
-            selected = std::min(std::max(selected, 0), (int)W.cols() - 1);
-            viewer.data().set_data(W.col(selected));
-            break;
-        case ',':
-            selected--;
-            selected = std::min(std::max(selected, 0), (int)W.cols() - 1);
-            viewer.data().set_data(W.col(selected));
-            break;
-        case '[':
-            viewer.data().set_data(smoothMM.col(1));
-            break;
-        }
-        return true;
-    };
-    viewer.launch();
+    // Eigen::RowVector3d sea_green(70. / 255., 252. / 255., 167. / 255.);
+    // igl::opengl::glfw::Viewer viewer;
+    // viewer.data().set_mesh(V, F);
+    // viewer.data().set_data(smoothMM.col(0));
+    // viewer.data().set_edges(C, BE, sea_green);
+    // viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
+    // {
+    //     switch (key)
+    //     {
+    //     case '.':
+    //         selected++;
+    //         selected = std::min(std::max(selected, 0), (int)W.cols() - 1);
+    //         viewer.data().set_data(W.col(selected));
+    //         break;
+    //     case ',':
+    //         selected--;
+    //         selected = std::min(std::max(selected, 0), (int)W.cols() - 1);
+    //         viewer.data().set_data(W.col(selected));
+    //         break;
+    //     case '[':
+    //         viewer.data().set_data(smoothMM.col(1));
+    //         break;
+    //     }
+    //     return true;
+    // };
+    // viewer.launch();
 
     double epsilon = 1e-5;
     smoothMM *= w_smooth;
@@ -149,7 +149,7 @@ bool PhantomAnimator::CalculateWeights(double w_smooth)
                 continue;
             map<int, double> coeff;
             coeff[i] = 1 - smoothMM(i, j);
-            double f = smoothMM(i,j) / (double)adjacent[i].size();
+            double f = smoothMM(i, j) / (double)adjacent[i].size();
             for (int j : adjacent[i])
                 coeff[j] = f;
             smoothM[j][i] = coeff;
@@ -172,7 +172,7 @@ bool PhantomAnimator::ReadW(string prefix)
         return false;
     if (!igl::readDMAT(prefix + ".S", smoothMM))
         return false;
-    
+
     cleanWeights.clear();
     smoothM.clear();
     smoothM.resize(3);
@@ -186,7 +186,7 @@ bool PhantomAnimator::ReadW(string prefix)
                 continue;
             map<int, double> coeff;
             coeff[i] = 1 - smoothMM(i, j);
-            double f = smoothMM(i,j) / (double)adjacent[i].size();
+            double f = smoothMM(i, j) / (double)adjacent[i].size();
             for (int j : adjacent[i])
                 coeff[j] = f;
             smoothM[j][i] = coeff;
@@ -230,13 +230,25 @@ bool PhantomAnimator::ReadW(string prefix)
 
 #include "igl/forward_kinematics.h"
 #include "igl/lbs_matrix.h"
-void PhantomAnimator::Animate(RotationList vQ)
+void PhantomAnimator::Animate(RotationList vQ, bool fixOthers)
 {
     MatrixXd M, T;
-    igl::forward_kinematics(C, BE, P, vQ, T);
-    for (int e = 0; e < BE.rows(); e++)
+    if (fixOthers)
     {
-        C.row(BE(e, 1)) = C.row(BE(e, 1)).homogeneous() * T.block(e * 4, 0, 4, 3);// a * Vector3d(C.row(BE(e, 1)));
+        T.resize(BE.rows() * 4, 3);
+        for (int i = 0; i < BE.rows(); i++)
+        {
+            Affine3d a = Translation3d(Vector3d(C.row(BE(i, 0)))) * vQ[i] * Translation3d(-Vector3d(C.row(BE(i, 0))));
+            T.block(i * 4, 0, 4, 3) = a.matrix().transpose().block(0, 0, 4, 3);
+        }
+    }
+    else
+    {
+        igl::forward_kinematics(C, BE, P, vQ, T);
+        for (int e = 0; e < BE.rows(); e++)
+        {
+            C.row(BE(e, 1)) = C.row(BE(e, 1)).homogeneous() * T.block(e * 4, 0, 4, 3); // a * Vector3d(C.row(BE(e, 1)));
+        }
     }
 
     igl::lbs_matrix(V, W, M);
@@ -253,7 +265,7 @@ void PhantomAnimator::AnimateDQS(RotationList vQ)
     myDqs(V, cleanWeights, vQ, vT, V);
 
     for (int e = 0; e < BE.rows(); e++)
-    {  
+    {
         C.row(BE(e, 1)) = C.row(BE(e, 1)).homogeneous() * T.block(e * 4, 0, 4, 3);
     }
 }

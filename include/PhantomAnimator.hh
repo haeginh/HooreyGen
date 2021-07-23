@@ -45,7 +45,7 @@ public:
     ~PhantomAnimator();
 
     bool ReadFiles(string prefix);
-    bool CalculateWeights(double w_smooth);
+    bool CalculateWeights(double w_smooth, bool boneOnly = false);
     bool WriteWeights(string prefix)
     {
         igl::writeDMAT(prefix + ".W", W, false);
@@ -55,7 +55,7 @@ public:
     bool ReadW(string prefix);
 
     VectorXd GetWeight(int col) { return W.col(col); }
-    void Animate(RotationList vQ);
+    void Animate(RotationList vQ, bool fixOther = false);
     void AnimateDQS(RotationList vQ);
 
     void GetMeshes(MatrixXd &_V, MatrixXi &_F, MatrixXd &_C, MatrixXi &_BE)
@@ -121,7 +121,7 @@ public:
     void ArmOffSet(MatrixXd normalsV, double w = 0.1)
     {
         VectorXd arms = W.col(2) + W.col(6);
-        arms = arms.array().pow(3);
+        //arms = arms.array().pow(3);
         double e(1e-3);
         for (int i = 0; i < V.rows(); i++)
         {
@@ -137,6 +137,25 @@ public:
         C = C0;
     }
 
+    void ShoulderUp(MatrixXd normalsV, double w = 0.1)
+    {
+        VectorXd up = smoothMM.col(JOINT::SHOULDER);
+        up /= up.array().maxCoeff();
+        //V.col(2) += up*w;
+        double e(1e-3);
+        for (int i = 0; i < V.rows(); i++)
+        {
+            if (up(i) < e)
+                continue;
+            V.row(i) += normalsV.row(i) * up(i) * w;
+        }
+    }
+    void WeackenUpperArm()
+    {
+        W.col(2) = W.col(2)*0.5;
+        W.col(6) = W.col(6)*0.5;
+        igl::normalize_row_sums(W, W);
+    }
     //variables
 private:
     MatrixXd C, C0, V, V0;

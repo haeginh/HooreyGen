@@ -44,6 +44,11 @@ int main(int argc, char **argv)
     vQ[8] = Quaterniond(AngleAxisd(-45 * PI / 180., Vector3d(0, 0, 1)));
     vQ[4] = Quaterniond(AngleAxisd(45 * PI / 180., Vector3d(0, 0, 1)));
 
+    ofstream ofs("hoorey.txt");
+    for(int i=0;i<vQ.size();i++)
+    {
+        ofs<<vQ[i].w()<<" "<<vQ[i].x()<<" "<<vQ[i].y()<<" "<<vQ[i].z()<<endl;
+    }ofs.close();
     AngleAxisd aa6 = AngleAxisd(vQ[6]);
     AngleAxisd aa2 = AngleAxisd(vQ[2]);
 
@@ -63,6 +68,7 @@ int main(int argc, char **argv)
         {
         case 'C':
             phantom->CalculateWeights(0.1);
+            break;
         case '0': //elbow & wrist
             vQ1[3] = vQ[3];
             vQ1[4] = vQ[4];
@@ -112,8 +118,25 @@ int main(int argc, char **argv)
             viewer.data().compute_normals();
             viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
             break;
-        case '4': //shoulder front
+        case '4': //offset
             phantom->ArmOffSet(viewer.data().V_normals, 0.1);
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            break;
+        case '5': //shoulder up
+            cout << "deforming..." << flush;
+            //viewer.data().set_data(phantom->GetSmoothW());
+            //phantom->WeackenUpperArm();
+            vQ1[5] = Quaterniond(AngleAxisd(5 * PI / 180., Vector3d(0, 1, 0)));
+            vQ1[1] = Quaterniond(AngleAxisd(-5 * PI / 180., Vector3d(0, 1, 0)));
+            phantom->Animate(vQ1, true);
+            //phantom->ShoulderUp(viewer.data().V_normals, 0.1);
+            cout << "done" << endl;
+            viewer.data().set_vertices(phantom->GetV());
+            viewer.data().compute_normals();
+            break;
+        case '6': //offset
+            phantom->ShoulderUp(viewer.data().V_normals, 0.1);
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
             break;
