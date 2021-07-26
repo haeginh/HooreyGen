@@ -1,9 +1,10 @@
 #include <iostream>
 #include <ctime>
 #include <functional>
+#include <igl/opengl/glfw/Viewer.h>
+#include <igl/copyleft/cgal/intersect_other.h>
 
 #include "PhantomAnimator.hh"
-#include "igl/opengl/glfw/Viewer.h"
 
 #define PI 3.14159265358979323846
 
@@ -22,6 +23,10 @@ int main(int argc, char **argv)
 {
     if (argc != 2)
         PrintUsage();
+
+    //pre-generated bone file
+    MatrixXd Vbone; MatrixXi Fbone; 
+    igl::readOBJ("../bone/result.obj",Vbone, Fbone);
 
     //phantom animator
     PhantomAnimator *phantom = new PhantomAnimator(string(argv[1]));
@@ -111,6 +116,22 @@ int main(int argc, char **argv)
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);   // smoothing 50
             cout << "done" << endl;
             update = true;
+            break;
+        case '5': 
+            viewer.append_mesh();
+            viewer.data().set_mesh(Vbone, Fbone);
+            {
+                MatrixXi IF;
+                igl::copyleft::cgal::intersect_other(phantom->GetV(), phantom->GetF(), Vbone, Fbone, false, IF);
+                MatrixXd C0 = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(phantom->GetF().rows(), 1);
+                MatrixXd C1 = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(Fbone.rows(), 1);
+                MatrixXd R = RowVector3d(1., 0.3, 0.3).replicate(IF.rows(), 1);
+                igl::slice_into(R, IF.col(0), 1, C0);
+                igl::slice_into(R, IF.col(1), 1, C1);
+                viewer.data().set_colors(C1);
+                viewer.data(0).set_colors(C0);
+                cout<<"There are "<<IF.rows()<<" intersections between skin and bone"<<endl; 
+            }
             break;
         case 'S': //ignore the message "^tetrahedralize: Tetgen failed to create tets"
             {
