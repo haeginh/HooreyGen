@@ -95,13 +95,13 @@ int main(int argc, char **argv)
             phantom->Animate(vQ1, true);                                     // up 10
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);           // shoulder offset 0.3
+            phantom->ShoulderUpOffset(viewer.data().V_normals, 0.3);           // shoulder offset 0.3
             phantom->ReleaseRest();                                          // relax
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100); // smoothing 100
             phantom->Animate(vQ1, true);                                     // up 5
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);           // shoulder offset 0.3
+            phantom->ShoulderUpOffset(viewer.data().V_normals, 0.3);           // shoulder offset 0.3
             phantom->ReleaseRest();                                          // relax
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100); // smoothing 100
             phantom->Animate(vQ1, true);                                     // up 5
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 150); // smoothing 150
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderOffset(viewer.data().V_normals, 0.2);            // shoulder offset 0.2
+            phantom->ShoulderUpOffset(viewer.data().V_normals, 0.2);            // shoulder offset 0.2
             phantom->ReleaseRest();                                           // relax
             phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);   // smoothing 50
             phantom->ArmOffset(viewer.data().V_normals, 0.3);                 // arm offset 0.3
@@ -131,12 +131,47 @@ int main(int argc, char **argv)
                 viewer.data().set_colors(C1);
                 viewer.data(0).set_colors(C0);
                 cout<<"There are "<<IF.rows()<<" intersections between skin and bone"<<endl; 
+                viewer.selected_data_index = 0;
+            }
+            break;
+        // case 'U': 
+        //     phantom->ShoulderUp();
+        //     update = true;
+        //     break;
+        case '6': 
+            viewer.append_mesh();
+            viewer.data().set_mesh(Vbone, Fbone);
+            {
+                MatrixXi IF;
+                igl::copyleft::cgal::intersect_other(phantom->GetV(), phantom->GetF(), Vbone, Fbone, false, IF);
+                MatrixXd C0 = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(phantom->GetF().rows(), 1);
+                MatrixXd C1 = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(Fbone.rows(), 1);
+                MatrixXd R = RowVector3d(1., 0.3, 0.3).replicate(IF.rows(), 1);
+                igl::slice_into(R, IF.col(0), 1, C0);
+                igl::slice_into(R, IF.col(1), 1, C1);
+                viewer.data().set_colors(C1);
+                viewer.data(0).set_colors(C0);
+                cout<<"There are "<<IF.rows()<<" intersections between skin and bone"<<endl; 
             }
             break;
         case 'S': //ignore the message "^tetrahedralize: Tetgen failed to create tets"
             {
                 MatrixXd VT; MatrixXi TT, FT; // dummies
                 igl::copyleft::tetgen::tetrahedralize(phantom->GetV(), phantom->GetF(), "d",VT, TT, FT);
+            }
+            break;
+        case 'D': 
+            {
+                MatrixXi IF;
+                igl::copyleft::cgal::intersect_other(phantom->GetV(), phantom->GetF(), Vbone, Fbone, false, IF);
+                MatrixXd C0 = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(phantom->GetF().rows(), 1);
+                MatrixXd C1 = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(Fbone.rows(), 1);
+                MatrixXd R = RowVector3d(1., 0.3, 0.3).replicate(IF.rows(), 1);
+                igl::slice_into(R, IF.col(0), 1, C0);
+                igl::slice_into(R, IF.col(1), 1, C1);
+                viewer.data(1).set_colors(C1);
+                viewer.data(0).set_colors(C0);
+                cout<<"There are "<<IF.rows()<<" intersections between skin and bone"<<endl; 
             }
             break;
         case 'V':
@@ -148,26 +183,26 @@ int main(int argc, char **argv)
             break;
         case ',':
             selected = min(max(--selected, 0), 8);
-            viewer.data().set_data(phantom->GetWeight(selected));
+            viewer.data(0).set_data(phantom->GetWeight(selected));
             break;
         case '.':
             selected = min(max(++selected, 0), 8);
-            viewer.data().set_data(phantom->GetWeight(selected));
+            viewer.data(0).set_data(phantom->GetWeight(selected));
             break;
         case '[':
             selected = min(max(--selected, 0), 3);
-            viewer.data().set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
+            viewer.data(0).set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
             break;
         case ']':
             selected = min(max(++selected, 0), 3);
-            viewer.data().set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
+            viewer.data(0).set_data(phantom->GetSmoothW(PhantomAnimator::JOINT(selected)));
             break;
         }
         if(update)
         {
-            viewer.data().set_vertices(phantom->GetV());
-            viewer.data().compute_normals();
-            viewer.data().set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
+            viewer.data(0).set_vertices(phantom->GetV());
+            viewer.data(0).compute_normals();
+            viewer.data(0).set_edges(phantom->GetC(), phantom->GetBE(), sea_green);
         }
         return true;
     };

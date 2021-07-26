@@ -139,11 +139,11 @@ public:
         }
     }
 
-    void ShoulderOffset(MatrixXd normalsV, double w = 0.1)
+    void ShoulderUpOffset(MatrixXd normalsV, double w = 0.1)
     {
         VectorXd up = smoothMM.col(JOINT::SHOULDER);
         up /= up.array().maxCoeff();
-        //V.col(2) += up*w;
+        V.col(2) += up*w;
         double e(1e-3);
         for (int i = 0; i < V.rows(); i++)
         {
