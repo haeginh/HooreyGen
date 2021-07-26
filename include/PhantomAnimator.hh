@@ -29,7 +29,6 @@
 #include <igl/Timer.h>
 #include <igl/mat_max.h>
 #include <igl/arap.h>
-#include <igl/copyleft/cgal/SelfIntersectMesh.h>
 
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
@@ -159,6 +158,7 @@ public:
         V = V0;
         C = C0;
     }
+
 
 private:
     double CalculateVolume(const MatrixXd &V1, const MatrixXi &F1)

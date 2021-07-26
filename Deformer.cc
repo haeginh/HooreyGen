@@ -82,40 +82,42 @@ int main(int argc, char **argv)
         case '3':
             phantom->CalculateWeights(0.1);
             break;
-
         case '4': //shoulder up
             cout << "deforming..." << flush;
-            //viewer.data().set_data(phantom->GetSmoothW());
-            //phantom->WeackenUpperArm();
             vQ1[5] = Quaterniond(AngleAxisd(5 * PI / 180., Vector3d(0, 1, 0)));
             vQ1[1] = Quaterniond(AngleAxisd(-5 * PI / 180., Vector3d(0, 1, 0)));
             phantom->Animate(vQ1, true);
-            phantom->Animate(vQ1, true);
+            phantom->Animate(vQ1, true);                                     // up 10
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);
-            phantom->ReleaseRest();
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
-            phantom->Animate(vQ1, true);
+            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);           // shoulder offset 0.3
+            phantom->ReleaseRest();                                          // relax
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100); // smoothing 100
+            phantom->Animate(vQ1, true);                                     // up 5
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);
-            phantom->ReleaseRest();
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100);
-            phantom->Animate(vQ1, true);
-            phantom->ReleaseRest();
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 150);
+            phantom->ShoulderOffset(viewer.data().V_normals, 0.3);           // shoulder offset 0.3
+            phantom->ReleaseRest();                                          // relax
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 100); // smoothing 100
+            phantom->Animate(vQ1, true);                                     // up 5
+            phantom->ReleaseRest();                                          // relax
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 150); // smoothing 150
             viewer.data().set_vertices(phantom->GetV());
             viewer.data().compute_normals();
-            phantom->ShoulderOffset(viewer.data().V_normals, 0.2);
-            phantom->ReleaseRest();
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);
-            phantom->ArmOffset(viewer.data().V_normals, 0.3);
-            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);
+            phantom->ShoulderOffset(viewer.data().V_normals, 0.2);            // shoulder offset 0.2
+            phantom->ReleaseRest();                                           // relax
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);   // smoothing 50
+            phantom->ArmOffset(viewer.data().V_normals, 0.3);                 // arm offset 0.3
+            phantom->LaplacianSmooth(PhantomAnimator::JOINT::SHOULDER, 50);   // smoothing 50
             cout << "done" << endl;
             update = true;
             break;
- 
+        case 'S': //ignore the message "^tetrahedralize: Tetgen failed to create tets"
+            {
+                MatrixXd VT; MatrixXi TT, FT; // dummies
+                igl::copyleft::tetgen::tetrahedralize(phantom->GetV(), phantom->GetF(), "d",VT, TT, FT);
+            }
+            break;
         case 'V':
             vol = phantom->GetVolume();
             cout<<"current volume : "<<vol<<" / "<<phantom->GetVolume(true)<<" ("<<vol/phantom->GetVolume(true) * 100.f<<"%)"<<endl;
