@@ -29,11 +29,15 @@
 #include <igl/Timer.h>
 #include <igl/mat_max.h>
 #include <igl/arap.h>
-#include <igl/copyleft/cgal/SelfIntersectMesh.h>
+#include <igl/copyleft/cgal/intersect_other.h>
+#include <igl/copyleft/cgal/remesh_self_intersections.h>
+#include "igl/opengl/glfw/Viewer.h"
 
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
 #include <Eigen/SparseCore>
+
+#define PI 3.14159265358979323846
 
 class Viewer;
 class PhantomAnimator
@@ -45,28 +49,12 @@ public:
     ~PhantomAnimator();
 
     bool ReadFiles(string prefix);
-    bool CalculateWeights(double w_smooth);
-    bool WriteWeights(string prefix)
-    {
-        igl::writeDMAT(prefix + ".W", W, false);
-        igl::writeDMAT(prefix + ".S", smoothMM, false);
-        return true;
-    }
-    bool ReadW(string prefix);
-
-    VectorXd GetWeight(int col) { return W.col(col); }
     void Animate(RotationList vQ);
-    void AnimateDQS(RotationList vQ);
 
-    void GetMeshes(MatrixXd &_V, MatrixXi &_F, MatrixXd &_C, MatrixXi &_BE)
-    {
-        _V = V;
-        _F = F;
-        _C = C;
-        _BE = BE;
-    }
     MatrixXd GetV() { return V; }
     MatrixXi GetF() { return F; }
+    MatrixXd GetVI() { return VI; }
+    MatrixXi GetFI() { return FI; }
     MatrixXd GetC() { return C; }
     MatrixXi GetBE() { return BE; }
     VectorXi GetP() { return P; }
@@ -89,67 +77,159 @@ public:
         }
     }
 
-    enum JOINT{SHOULDER, ELBOW, WRIST};
-    void LaplacianSmooth(JOINT j, int iterNum) //all
+    void LaplacianSmooth(int j, int iterNum, double fix0, double fix1) //all
     {
         for (int i = 0; i < iterNum; i++)
         {
-            for (auto iter : smoothM[(int)j])
+            for (int n = Vnum[j].first; n < Vnum[j].first + Vnum[j].second; n++)
             {
                 Vector3d v(0, 0, 0);
-                for (auto iter2 : iter.second)
+                for (int a : adjacent[n])
                 {
-                    v += V.row(iter2.first) * iter2.second;
+                    v += V.row(a);
                 }
-                V.row(iter.first) = v;
+                v /= (double)adjacent[n].size();
+                double w = min(abs(W1(n, j) - fix0), abs(W1(n, j) - fix1));
+                if (w < 0.001)
+                    continue;
+                w *= 0.01;
+                V.row(n) = V.row(n) * (1 - w) + v.transpose() * w;
             }
         }
     }
 
-    VectorXd GetSmoothW(JOINT j)
+    void AdjustVolume(int j, double fix0, double fix1, const MatrixXd &normal)
     {
-        return smoothMM.col((int)j);
-    }
-
-    void ReleaseRest(double w = 1.)
-    {
-        MatrixXd U0 = V0.array().colwise() * W.col(0).array() * w;
-        MatrixXd U = V.array().colwise() * (1 - W.col(0).array() * w);
-        V = U0 + U;
-    }
-
-    void ArmOffSet(MatrixXd normalsV, double w = 0.1)
-    {
-        VectorXd arms = W.col(2) + W.col(6);
-        arms = arms.array().pow(3);
-        double e(1e-3);
-        for (int i = 0; i < V.rows(); i++)
+        double diff = GetVolume(j) / GetVolume(-j) - 1.f;
+        while (abs(diff) > 0.0001)
         {
-            if (arms(i) < e)
-                continue;
-            V.row(i) += normalsV.row(i) * arms(i) * w;
+            if (diff > 0)
+                LaplacianSmooth(j, 3, fix0, fix1);
+            else
+            {
+                for (int n = Vnum[j].first; n < Vnum[j].first + Vnum[j].second; n++)
+                {
+                    double w = min(abs(W1(n, j) - fix0), abs(W1(n, j) - fix1));
+                    if (w < 0.001)
+                        continue;
+                    V.row(n) += normal.row(n) * w * 0.01;
+                }
+            }
+            diff = GetVolume(j) / GetVolume(-j) - 1.f;
         }
     }
+
+    void WriteOBJ(string fileN)
+    {
+        ofstream ofs(fileN);
+        ofs << "#result file for arm bones" << endl
+            << endl;
+        ofs << "mtllib " + fileN.substr(0, fileN.length() - 3) + "mtl" << endl
+            << endl;
+        ofs.setf(ios::fixed);
+        ofs.setf(ios::showpoint);
+        ofs.precision(5);
+        for (int i = 0; i < V.rows(); i++)
+            ofs << "v " << V(i, 0) << " " << V(i, 1) << " " << V(i, 2) << endl;
+        for (int s = 0; s <  BE.rows(); s++)
+        {
+            ofs << endl
+                << "g " << s << endl;
+            ofs << "usemtl " << s << endl;
+            ofs << "s" << endl
+                << endl;
+            for (int i = 0; i < Fnum[s].second; i++)
+                ofs << "f " << F(Fnum[s].first + i, 0) + 1 << " " << F(Fnum[s].first + i, 1) + 1 << " " << F(Fnum[s].first + i, 2) + 1 << endl;
+        }
+    }
+
+    //intersection detection
+    int DetectIntersections(MatrixXd &Color, int a, int b = -1);
+    int DetectIntersections(MatrixXd &Color);
+    int SelfIntersection(MatrixXd &Color)
+    {
+        igl::copyleft::cgal::RemeshSelfIntersectionsParam param;
+        param.detect_only = true;
+        MatrixXd VV;
+        MatrixXi FF, IF, TT;
+        VectorXi J, IM;
+        igl::copyleft::cgal::remesh_self_intersections(V, F, param, VV, FF, IF, J, IM);
+        if (IF.rows() > 0)
+        {
+            vector<int> Kvec(IF.data(), IF.data() + IF.size());
+            sort(Kvec.begin(), Kvec.end());
+            Kvec.erase(unique(Kvec.begin(), Kvec.end()), Kvec.end());
+            MatrixXi K = Eigen::Map<Eigen::VectorXi, Eigen::Unaligned>(Kvec.data(), Kvec.size());
+            MatrixXd R = RowVector3d(1., 0.3, 0.3).replicate(K.rows(), 1);
+            igl::slice_into(R, K, 1, Color);
+        }
+        return IF.rows();
+    }
+
+    //giving weights
+    void CalculateElbowW(int a, Vector3d axis, double inner2 = 1.f, double outer2 = 30.f);
+    double CalculateShoulderW(int a, Vector3d axis, double inner2 = 1.f, double outer2 = 25.f);
+    void CalculateCleanWeights();
+    void InitializeW()
+    {
+        W = MatrixXd::Zero(V.rows(), BE.rows());
+        for (int i = 0; i < BE.rows(); i++)
+            W.block(Vnum[i].first, i, Vnum[i].second, 1) = VectorXd::Ones(Vnum[i].second);
+    }
+
+    VectorXd GetWeight(int i) { return W.col(i); }
+    void LeaveOnlyShoulderWeights()
+    {
+        for (int i = 0; i < BE.rows(); i++)
+        {
+            if (i == 1 || i == 5)
+                continue;
+            W.block(Vnum[i].first, 0, Vnum[i].second, BE.rows()) = MatrixXd::Zero(Vnum[i].second, BE.rows());
+            W.block(Vnum[i].first, 0, Vnum[i].second, 1) = VectorXd::Ones(Vnum[i].second);
+        }
+    }
+
+    //set W1 for vol. adjustment
+    void SetW1(){W1=W;}
 
     void InitializeV()
     {
         V = V0;
         C = C0;
     }
-
-    void ReadPLY(){
-        plyV.resize(8);
-        plyF.resize(8);
-        for(int i=1;i<9;i++)
-            igl::readPLY(std::to_string(i) + ".ply", plyV[i-1], plyF[i-1]);
+    vector<int> GetShellVec(){
+        vector<int> shells;
+        for(auto iter:Fnum) shells.push_back(iter.first);
+        return shells;
     }
 
-    void WritePLY(){
-        for(int i=1;i<9;i++)
-            igl::writePLY(std::to_string(i) + "1.ply", plyV[i-1], plyF[i-1]);
+    //volume check
+    double GetVolume(int id)
+    {
+        if (id < 0)
+            return volumes[-id];
+        else if (id<100)
+            return CalculateVolume(V, F.block(Fnum[id].first, 0, Fnum[id].second, 3));
+        else
+            return CalculateVolume(VI, FI.block(Fnum[id].first, 0, Fnum[id].second, 3));
     }
-    //variables
 private:
+    double CalculateVolume(const MatrixXd &V1, const MatrixXi &F1)
+    {
+        Eigen::MatrixXd V2(V1.rows() + 1, V1.cols());
+        V2.topRows(V1.rows()) = V1;
+        V2.bottomRows(1).setZero();
+        Eigen::MatrixXi T(F1.rows(), 4);
+        T.leftCols(3) = F1;
+        T.rightCols(1).setConstant(V1.rows());
+        Eigen::VectorXd vol;
+        igl::volume(V2, T, vol);
+        return std::abs(vol.sum());
+    }
+    void ReadOBJ(string fName);
+
+    //variables
+    string name;
     MatrixXd C, C0, V, V0;
     MatrixXi BE, BE0, F;
     VectorXi P;
@@ -158,19 +238,21 @@ private:
     vector<map<int, double>> cleanWeights;
 
     //LBS
-    MatrixXd W;
+    MatrixXd W, W1; // W1 is for volume adjustment
 
     //smoothing
     map<int, vector<int>> adjacent;
-    vector<map<int, map<int, double>>> smoothM;
-    MatrixXd smoothMM;
-
-    map<int, vector<int>> adjacent_T;
 
     //bone ply
-    vector<MatrixXd> plyV;
-    vector<MatrixXd> plyF;
+    map<int, pair<int, int>> Vnum, Fnum; //#V, #F
+    //map<int, int> boneID;
 
+    //volumes
+    map<int, double> volumes;
+
+    //inner structures
+    MatrixXd VI, VI0, WI;
+    MatrixXi FI;
 };
 
 #endif

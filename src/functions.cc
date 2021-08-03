@@ -74,9 +74,6 @@ map<int, map<int, double>> GenerateBarycentricCoord(MatrixXd V_f, MatrixXi T_f, 
         cout<<"\rGenerating barycentric coord..."<<baryCoords.size()<<"/"<<V.rows()<<"       "<<flush;
         //if((int)baryCoords.size()==V.rows()) break;
     }cout<<endl;
-    if((int)baryCoords.size()!=V.rows()){
-        cout<<"Check if all the vertices are in frame model!!"<<endl; exit(100);
-    }
     return baryCoords;
 }
 void PrintBaryCoords(string file, map<int, map<int, double>> &baryCoords){
