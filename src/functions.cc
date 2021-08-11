@@ -28,7 +28,6 @@ map<tuple<int,int,int>,vector<int>> GenerateGrid(MatrixXd V, double size){
     }
     return grid;
 }
-
 map<int, map<int, double>> GenerateBarycentricCoord(MatrixXd V_f, MatrixXi T_f, MatrixXd V){
     map<tuple<int,int,int>,vector<int>> grid = GenerateGrid(V);
     map<int, map<int, double>> baryCoords;
@@ -46,9 +45,9 @@ map<int, map<int, double>> GenerateBarycentricCoord(MatrixXd V_f, MatrixXi T_f, 
             min(2) = min(2)<tet[e](2)? min(2):tet[e](2);
         }
         double invVol6 = 1./(tet[1]-tet[0]).cross(tet[2]-tet[0]).dot(tet[3]-tet[0]);
-        int i_max = floor(max(0)+0.5);int i_min = floor(min(0)+0.5);
-        int j_max = floor(max(1)+0.5);int j_min = floor(min(1)+0.5);
-        int k_max = floor(max(2)+0.5);int k_min = floor(min(2)+0.5);
+        int i_max = floor(max(0))+1;int i_min = floor(min(0));
+        int j_max = floor(max(1))+1;int j_min = floor(min(1));
+        int k_max = floor(max(2))+1;int k_min = floor(min(2));
         for(int i=i_min;i<i_max+1;i++){
             for(int j=j_min;j<j_max+1;j++){
                 for(int k=k_min;k<k_max+1;k++){
@@ -58,11 +57,11 @@ map<int, map<int, double>> GenerateBarycentricCoord(MatrixXd V_f, MatrixXi T_f, 
                         Vector3d v = V.row(idx).transpose();
                         double b0 = (tet[1]-v).cross(tet[2]-v).dot(tet[3]-v)*invVol6;
                         if(b0<epsl) continue;
-                        double b1 = (v-tet[0]).cross(tet[2]-tet[0]).dot(tet[3]-tet[0])*invVol6;
+                        double b1 = (tet[0]-v).cross(tet[3]-v).dot(tet[2]-v)*invVol6;
                         if(b1<epsl) continue;
-                        double b2 = (tet[1]-tet[0]).cross(v-tet[0]).dot(tet[3]-tet[0])*invVol6;
+                        double b2 = (tet[0]-v).cross(tet[1]-v).dot(tet[3]-v)*invVol6;
                         if(b2<epsl) continue;
-                        double b3 = (tet[1]-tet[0]).cross(tet[2]-tet[0]).dot(v-tet[0])*invVol6;
+                        double b3 = (tet[0]-v).cross(tet[2]-v).dot(tet[1]-v)*invVol6;
                         if(b3<epsl) continue;
                         map<int, double> bary;
                         bary[T_f(n,0)] = b0; bary[T_f(n,1)] = b1; bary[T_f(n,2)] = b2; bary[T_f(n,3)] = b3;
@@ -74,6 +73,9 @@ map<int, map<int, double>> GenerateBarycentricCoord(MatrixXd V_f, MatrixXi T_f, 
         cout<<"\rGenerating barycentric coord..."<<baryCoords.size()<<"/"<<V.rows()<<"       "<<flush;
         //if((int)baryCoords.size()==V.rows()) break;
     }cout<<endl;
+    if((int)baryCoords.size()!=V.rows()){
+        cout<<"Check if all the vertices are in frame model!!"<<endl; exit(100);
+    }
     return baryCoords;
 }
 void PrintBaryCoords(string file, map<int, map<int, double>> &baryCoords){

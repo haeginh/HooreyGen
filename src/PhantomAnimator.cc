@@ -8,14 +8,16 @@ PhantomAnimator::PhantomAnimator(string prefix)
     ReadFiles(prefix);
     ReadOBJ(prefix);
 
-    cout<<"<Initial bone volumes>"<<endl;
-    for(auto iter:Fnum)
+    cout << "<Initial bone volumes>" << endl;
+    for (auto iter : Fnum)
     {
         double vol;
-        if(iter.first<100) vol = CalculateVolume(V0, F.block(iter.second.first, 0, iter.second.second, 3));
-        else vol = CalculateVolume(VI0, FI.block(iter.second.first, 0, iter.second.second, 3));
+        if (iter.first < 100)
+            vol = CalculateVolume(V0, F.block(iter.second.first, 0, iter.second.second, 3));
+        else
+            vol = CalculateVolume(VI0, FI.block(iter.second.first, 0, iter.second.second, 3));
         volumes[iter.first] = vol;
-        cout<<iter.first<<" : "<<vol<<endl;
+        cout << iter.first << " : " << vol << endl;
     }
     PreComputeAdjacent();
     //CalculateWeights(0.1);
@@ -315,6 +317,73 @@ int PhantomAnimator::DetectIntersections(MatrixXd &Color)
     return count;
 }
 
+int PhantomAnimator::DetectIntersections(MatrixXd &color, MatrixXd &colorI, bool fix)
+{
+    MatrixXi IF;
+    igl::copyleft::cgal::intersect_other(V, F, VI, FI, false, IF);
+    if (IF.rows())
+    {
+        MatrixXd R = RowVector3d(1., 0.3, 0.3).replicate(IF.rows(), 1);
+        igl::slice_into(R, IF.col(0), 1, color);
+        igl::slice_into(R, IF.col(1), 1, colorI);
+        if (fix)
+        {
+            //MatrixXi face = igl::slice(F, IF.col(0));
+            MatrixXi faceI = igl::slice(FI, IF.col(1));
+            VectorXi faceVI(Map<VectorXi>(faceI.data(), faceI.cols()*faceI.rows()));
+            vector<int> vVecI(faceVI.data(), faceVI.data() + faceVI.size());
+            sort(vVecI.begin(), vVecI.end());
+            vVecI.erase(unique(vVecI.begin(), vVecI.end()), vVecI.end());
+            //MatrixXd normals = GetNormal(V,F);
+            MatrixXd normalsI = GetNormal(VI,FI);
+
+            // for (int i : vVec)
+            //     V.row(i) = V.row(i) + normals.row(i) * 0.01;
+            vector<int> sVec;
+            for (int i : vVecI)
+            {
+                VI.row(i) = VI.row(i) - normalsI.row(i) * 0.05;
+                sVec.insert(sVec.end(), adjacentI[i].begin(), adjacentI[i].end());
+            }
+            sort(sVec.begin(), sVec.end());
+            sVec.erase(unique(sVec.begin(), sVec.end()), sVec.end());
+            for (int i : sVec)
+            {
+                Vector3d c(0.,0.,0.);
+                for(int n:adjacentI[i])
+                    c += VI.row(n);
+                c /= (double) adjacentI[i].size();
+                VI.row(i) = VI.row(i)*0.7 + c.transpose() * 0.3;
+            }
+
+            faceI = igl::slice(F, IF.col(0));
+            faceVI = Map<VectorXi>(faceI.data(), faceI.cols()*faceI.rows());
+            vVecI = vector<int>(faceVI.data(), faceVI.data() + faceVI.size());
+            sort(vVecI.begin(), vVecI.end());
+            vVecI.erase(unique(vVecI.begin(), vVecI.end()), vVecI.end());
+            sVec.clear();
+            MatrixXd normals = GetNormal(V,F);
+            for (int i : vVecI)
+            {
+                V.row(i) = V.row(i) + normals.row(i) * 0.05;
+                sVec.insert(sVec.end(), adjacent[i].begin(), adjacent[i].end());
+            }
+            sort(sVec.begin(), sVec.end());
+            sVec.erase(unique(sVec.begin(), sVec.end()), sVec.end());
+            for (int i : sVec)
+            {
+                Vector3d c(0.,0.,0.);
+                for(int n:adjacent[i])
+                    c += V.row(n);
+                c /= (double) adjacent[i].size();
+                V.row(i) = V.row(i)*0.7 + c.transpose() * 0.3;
+            }
+
+        }
+    }
+    return IF.rows();
+}
+
 void PhantomAnimator::CalculateElbowW(int a, Vector3d axis, double inner2, double outer2)
 {
     //check intersection
@@ -343,7 +412,8 @@ void PhantomAnimator::CalculateElbowW(int a, Vector3d axis, double inner2, doubl
         sort(vecB1.begin(), vecB1.end());
         vecA1.erase(unique(vecA1.begin(), vecA1.end()), vecA1.end());
         vecB1.erase(unique(vecB1.begin(), vecB1.end()), vecB1.end());
-        vecA = vecA1; vecB = vecB1;
+        vecA = vecA1;
+        vecB = vecB1;
         // center = Vector3d::Zero();
         // for (int i : vecA)
         //     center += Va.row(i);
@@ -353,15 +423,16 @@ void PhantomAnimator::CalculateElbowW(int a, Vector3d axis, double inner2, doubl
         break;
     }
 
-    MatrixXd VT;
-    MatrixXi TT, FT;
-    igl::copyleft::tetgen::tetrahedralize(Va, Fa, "pYq", VT, TT, FT);
-   
+    //MatrixXd VT;
+    MatrixXi TT = T.block(Tnum[a].first, 0, Tnum[a].second, 4).array() - Vnum[a].first; //, FT;
+    //igl::copyleft::tetgen::tetrahedralize(Va, Fa, "pYq", VT, TT, FT);
+
     vector<int> half, rigid;
     for (int i = 0; i < Va.rows(); i++)
     {
-        double dist2 = (Va.row(vecA[0]).transpose() - Vector3d(VT.row(i))).squaredNorm();
-        for(int n:vecA) dist2 = min(dist2, (Va.row(n).transpose() - Vector3d(VT.row(i))).squaredNorm());
+        double dist2 = (Va.row(vecA[0]).transpose() - Vector3d(Va.row(i))).squaredNorm();
+        for (int n : vecA)
+            dist2 = min(dist2, (Va.row(n).transpose() - Vector3d(Va.row(i))).squaredNorm());
         if (dist2 < inner2)
             half.push_back(i);
         else if (dist2 > outer2)
@@ -385,17 +456,20 @@ void PhantomAnimator::CalculateElbowW(int a, Vector3d axis, double inner2, doubl
     bbw_data.active_set_params.max_iter = 10;
     bbw_data.verbosity = 2;
     MatrixXd WT;
-    igl::bbw(VT, TT, B, BC, bbw_data, WT);
+    igl::bbw(Va, TT, B, BC, bbw_data, WT);
     W.block(Vnum[a].first, a, Vnum[a].second, 1) = WT.block(0, 1, Vnum[a].second, 1);
     W.block(Vnum[a].first, b, Vnum[a].second, 1) = WT.block(0, 0, Vnum[a].second, 1);
 
-    igl::copyleft::tetgen::tetrahedralize(Vb, Fb, "pYq", VT, TT, FT);
+    //igl::copyleft::tetgen::tetrahedralize(Vb, Fb, "pYq", VT, TT, FT);
+    TT = T.block(Tnum[b].first, 0, Tnum[b].second, 4).array() - Vnum[b].first;
+    ;
     half.clear();
     rigid.clear();
     for (int i = 0; i < Vb.rows(); i++)
     {
-        double dist2 = (Vb.row(vecB[0]).transpose() - Vector3d(VT.row(i))).squaredNorm();
-        for(int n:vecB) dist2 = min(dist2, (Vb.row(n).transpose() - Vector3d(VT.row(i))).squaredNorm());
+        double dist2 = (Vb.row(vecB[0]).transpose() - Vector3d(Vb.row(i))).squaredNorm();
+        for (int n : vecB)
+            dist2 = min(dist2, (Vb.row(n).transpose() - Vector3d(Vb.row(i))).squaredNorm());
         if (dist2 < inner2)
             half.push_back(i);
         else if (dist2 > outer2)
@@ -415,7 +489,7 @@ void PhantomAnimator::CalculateElbowW(int a, Vector3d axis, double inner2, doubl
         B(half.size() + i) = rigid[i];
         BC(half.size() + i, 1) = 1;
     }
-    igl::bbw(VT, TT, B, BC, bbw_data, WT);
+    igl::bbw(Vb, TT, B, BC, bbw_data, WT);
     W.block(Vnum[b].first, b, Vnum[b].second, 1) = WT.block(0, 1, Vnum[b].second, 1);
     W.block(Vnum[b].first, a, Vnum[b].second, 1) = WT.block(0, 0, Vnum[b].second, 1);
 }
@@ -450,15 +524,17 @@ double PhantomAnimator::CalculateShoulderW(int a, Vector3d axis, double inner2, 
         vecA = vecA1;
         break;
     }
-    MatrixXd VT;
-    MatrixXi TT, FT;
-    igl::copyleft::tetgen::tetrahedralize(Va, Fa, "pYq", VT, TT, FT);
+    //MatrixXd VT;
+    MatrixXi TT = T.block(Tnum[a].first, 0, Tnum[a].second, 4).array() - Vnum[a].first;
+    //, FT;
+    //igl::copyleft::tetgen::tetrahedralize(Va, Fa, "pYq", VT, TT, FT);
 
     vector<int> half, rigid;
     for (int i = 0; i < Va.rows(); i++)
     {
-        double dist2 = (Va.row(vecA[0]).transpose() - Vector3d(VT.row(i))).squaredNorm();
-        for(int n:vecA) dist2 = min(dist2, (Va.row(n).transpose() - Vector3d(VT.row(i))).squaredNorm());
+        double dist2 = (Va.row(vecA[0]).transpose() - Vector3d(Va.row(i))).squaredNorm();
+        for (int n : vecA)
+            dist2 = min(dist2, (Va.row(n).transpose() - Vector3d(Va.row(i))).squaredNorm());
         if (dist2 < inner2)
             half.push_back(i);
         else if (dist2 > outer2)
@@ -481,27 +557,30 @@ double PhantomAnimator::CalculateShoulderW(int a, Vector3d axis, double inner2, 
     bbw_data.active_set_params.max_iter = 10;
     bbw_data.verbosity = 2;
     MatrixXd WT;
-    igl::bbw(VT, TT, B, BC, bbw_data, WT);
+    igl::bbw(Va, TT, B, BC, bbw_data, WT);
     W.block(Vnum[a].first, 0, Vnum[a].second, BE.rows()) = MatrixXd::Zero(Vnum[a].second, BE.rows());
     W.block(Vnum[a].first, a, Vnum[a].second, 1) = WT.block(0, 1, Vnum[a].second, 1);
     W.block(Vnum[a].first, b, Vnum[a].second, 1) = WT.block(0, 0, Vnum[a].second, 1);
     return theta;
 }
 
-void PhantomAnimator::CalculateCleanWeights(){
+void PhantomAnimator::CalculateCleanWeights()
+{
     cleanWeights.clear();
     double e(1e-5);
-    for(int i=0;i<W.rows();i++)
+    for (int i = 0; i < W.rows(); i++)
     {
         double sum(0.);
         map<int, double> weight;
-        for(int j=0;j<W.cols();j++)
+        for (int j = 0; j < W.cols(); j++)
         {
-            if(W(i,j)<e) continue;
-            sum += W(i,j);
-            weight[j] = W(i,j);
+            if (W(i, j) < e)
+                continue;
+            sum += W(i, j);
+            weight[j] = W(i, j);
         }
-        for(auto &iter:weight) iter.second/=sum;
+        for (auto &iter : weight)
+            iter.second /= sum;
         cleanWeights.push_back(weight);
     }
 }
@@ -529,17 +608,17 @@ void PhantomAnimator::ReadOBJ(string fName)
         else if (first == "g")
         {
             if (objF_vec.size())
-            {   
-                Fnum[shell] = make_pair(prevF-outerF, objF_vec.size() - prevF);
+            {
+                Fnum[shell] = make_pair(prevF - outerF, objF_vec.size() - prevF);
                 prevF = objF_vec.size();
             }
             ss >> shell;
-            if(outerV==0 && shell>100) 
+            if (outerV == 0 && shell > 100)
             {
                 outerF = prevF;
                 outerV = prevV;
             }
-            Vnum[shell] = make_pair(prevV-outerV, objV_vec.size() - prevV);
+            Vnum[shell] = make_pair(prevV - outerV, objV_vec.size() - prevV);
             prevV = objV_vec.size();
         }
         else if (first == "f")
@@ -549,24 +628,69 @@ void PhantomAnimator::ReadOBJ(string fName)
             objF_vec.push_back(Vector3i(a - 1, b - 1, c - 1));
         }
     }
-    Fnum[shell] = make_pair(prevF-outerF, objF_vec.size() - prevF);
+    Fnum[shell] = make_pair(prevF - outerF, objF_vec.size() - prevF);
+
+    //extract FD
+    int num(0);
+    for(auto iter:Fnum)
+        if(iter.first<100 && iter.first>0) num+= iter.second.second;
+    FD.resize(num);
+    num = 0;
+    for(auto iter:Fnum)
+        if(iter.first<100&& iter.first>0)
+        for(int i=0;i<iter.second.second;i++)
+            FD(num++)= iter.second.first + i;
+
 
     //outer shells should come first
     V.resize(outerV, 3);
     for (int i = 0; i < V.rows(); i++)
         V.row(i) = objV_vec[i];
-    V0 = V;
     F.resize(outerF, 3);
     for (int i = 0; i < F.rows(); i++)
         F.row(i) = objF_vec[i];
 
+    //tetrahedralization
+    bool first(true);
+    for (int i = 0; i < BE.rows(); i++)
+    {
+        surface.push_back(Vnum[i].second);
+        MatrixXd V1 = V.block(Vnum[i].first, 0, Vnum[i].second, 3);
+        MatrixXi F1 = F.block(Fnum[i].first, 0, Fnum[i].second, 3).array() - Vnum[i].first;
+        MatrixXd VT;
+        MatrixXi TT, FT;
+        igl::copyleft::tetgen::tetrahedralize(V1, F1, "p/0.001YqO/3", VT, TT, FT);
+        if (first)
+        {
+            V0 = VT;
+            T = TT;
+            Tnum[i].first = 0;
+            first = false;
+        }
+        else
+        {
+            Vnum[i].first = V0.rows();
+            Tnum[i].first = T.rows();
+            F.block(Fnum[i].first, 0, Fnum[i].second, 3) = F1.array() + V0.rows();
+            T.conservativeResize(T.rows() + TT.rows(), 4);
+            T.bottomLeftCorner(TT.rows(), 4) = TT.array() + V0.rows();
+            V0.conservativeResize(V0.rows() + VT.rows(), 3);
+            V0.bottomLeftCorner(VT.rows(), 3) = VT;
+        }
+        Vnum[i].second = VT.rows();
+        Tnum[i].second = TT.rows();
+    }
+    V = V0;
     //inner structure
-    VI.resize(objV_vec.size()-outerV,3);
-    for(int i=0;i<VI.rows();i++)
-        VI.row(i) = objV_vec[outerV+i];
+    VI.resize(objV_vec.size() - outerV, 3);
+    for (int i = 0; i < VI.rows(); i++)
+        VI.row(i) = objV_vec[outerV + i];
     VI0 = VI;
-    FI.resize(objF_vec.size()-outerF,3);
-    for(int i=0;i<FI.rows();i++)
-        FI.row(i) = objF_vec[outerF+i];
-    FI = FI.array() - outerV;        
+    FI.resize(objF_vec.size() - outerF, 3);
+    for (int i = 0; i < FI.rows(); i++)
+        FI.row(i) = objF_vec[outerF + i];
+    FI = FI.array() - outerV;
+
+    auto baryCen = GenerateBarycentricCoord(V, T, VI);
+    bary = GenerateBarySparse(baryCen, V.rows());
 }
