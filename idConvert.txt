@@ -1,0 +1,24 @@
+1300 2 //humeri
+1400 1400 //humeri_us
+1500 1500 //humeri_m
+1700 1700 //humeri_ls
+1900 3 //ulnae
+2000 2000 //ulnae_s
+2100 2100 //ulnae_m
+2200 4 //wrist_cortical
+2300 2300 //wrist_s
+2400 1
+2500 2500 //clavicle_s
+4300 0 //ribs
+4500 1 //scapulae
+4600 4600 //scapulae_s
+4700 0 //cervical
+4900 0 //thoracic
+5500 0 //sternum
+5700 0 //cartilage_costal
+6200 0 //Breast_left_adipose
+6300 0 //Breast_left_glandular
+6400 0 //Breast_right_adipose
+6500 0 //Breast_right_glandular
+10300 0 //lymph_trunk
+13100 0 //thymus
