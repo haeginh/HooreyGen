@@ -2,6 +2,7 @@
 #include <ctime>
 #include <functional>
 #include <igl/opengl/glfw/Viewer.h>
+#include <igl/parula.h>
 
 #include "PhantomAnimator.hh"
 
@@ -42,7 +43,11 @@ int main(int argc, char **argv)
     viewer.append_mesh();
     viewer.data().set_mesh(phantom->GetVo(), phantom->GetFo());
     viewer.data().is_visible = false;
+    Eigen::MatrixXd CM;
+    igl::parula(Eigen::VectorXd::LinSpaced(100,0,1).eval(),false,CM);
+    viewer.data(0).set_colormap(CM);
     viewer.selected_data_index = 0;
+    viewer.core().background_color = Vector4f(1., 1., 1., 1.);
 
     RotationList vQ(9, Quaterniond::Identity());
     ifstream ifs("hoorey.txt");
@@ -161,7 +166,7 @@ int main(int argc, char **argv)
         }
     };
 
-    int selected(0);
+    int selected(0), dataID(0);
     viewer.callback_key_down = [&](igl::opengl::glfw::Viewer &viewer, unsigned char key, int mods) -> bool
     {
         double vol;
@@ -207,7 +212,7 @@ int main(int argc, char **argv)
         case '4':
         {
             MatrixXd color = RowVector3d(255. / 255, 246. / 255., 51. / 255.).replicate(phantom->GetFo().rows(), 1);
-            phantom->SetSkinLayers(color);
+            if(!phantom->SetSkinLayers(color)) cout<<"fail!"<<endl;
             viewer.data(2).set_vertices(phantom->GetVo());
             viewer.data(2).set_colors(color);
             viewer.data(2).is_visible = true;
@@ -296,6 +301,9 @@ int main(int argc, char **argv)
             viewer.data(0).set_mesh(phantom->GetV(), phantom->GetF());
             viewer.data(0).compute_normals();
             break;
+        case 'M':
+            viewer.selected_data_index=dataID++%3;
+            cout<<"current data ID: "<<viewer.selected_data_index<<endl;
         }
         if (update)
         {
@@ -342,7 +350,7 @@ int main(int argc, char **argv)
                 int num = 1;
                 while (num)
                 {
-                    num = phantom->DetectSelfInterSection(color, 0.1);
+                    num = phantom->DetectSelfInterSection(color, 0.5);
                     cout << " -> " << num << flush;
                 }cout<<endl;
 
@@ -413,6 +421,7 @@ int main(int argc, char **argv)
                 recipe.push_back(COVER);
             }
         }
+        viewer.data(0).set_colormap(CM);
         return false;
     };
     viewer.data(0).is_visible = true;

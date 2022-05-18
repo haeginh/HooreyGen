@@ -121,7 +121,7 @@ public:
             adjacentO[Fo(i, 2)].push_back(Fo(i, 0));
             adjacentOF[Fo(i, 0)].push_back(i);
             adjacentOF[Fo(i, 1)].push_back(i);
-            adjacentOF[Fo(i, 2)].push_back(i);            
+            adjacentOF[Fo(i, 2)].push_back(i);
         }
         for (auto &iter : adjacentO)
         {
@@ -295,20 +295,21 @@ public:
         near.erase(unique(near.begin(), near.end()), near.end());
         for (int i : near)
         {
-            if(chk.find(i)!=chk.end()) continue;
+            if (chk.find(i) != chk.end())
+                continue;
             Vector3d c(0, 0, 0);
             for (int j : adjacent[i])
                 c += V.row(j);
             c /= (double)adjacent[i].size();
             // V.row(i) = V.row(i)*0.8 + c.transpose()*0.2;
-            V.row(i) = (V.row(i) + V_normals.row(i) * w * 0.5) * 0.8 + c.transpose()*0.2;
+            V.row(i) = (V.row(i) + V_normals.row(i) * w * 0.5) * 0.8 + c.transpose() * 0.2;
         }
     }
-    
+
     // outer skin
     void MergeOBJ();
     void WriteMergedOBJ();
-    void SetSkinLayers(MatrixXd &color)
+    bool SetSkinLayers(MatrixXd &color)
     {
         cout << "<Skin layer generation>" << endl;
         //initial offset
@@ -379,7 +380,7 @@ public:
                     for (int n : adjacentO[i])
                         c += Vo.row(n);
                     c /= (double)adjacentO[i].size();
-                    Vo.row(i) = c;//Vo.row(i) * 0.5 + c.transpose() * 0.5;
+                    Vo.row(i) = c; //Vo.row(i) * 0.5 + c.transpose() * 0.5;
                 }
             }
             cout << endl;
@@ -387,23 +388,23 @@ public:
         };
         //if(FixSelfIntersectionO()) AdjustVolumeO();
 
-        function<bool()> FixProtruded = [&]()->bool
+        function<bool()> FixProtruded = [&]() -> bool
         {
             bool fixed(false);
             MatrixXd F_normals;
             igl::per_face_normals(Vo, Fo, F_normals);
 
-            for(int i=0;i<D.rows();i++)
+            for (int i = 0; i < D.rows(); i++)
             {
                 Vector3d normal = F_normals.row(adjacentOF[D(i)][0]);
-                for(int n:adjacentOF[D(i)])
+                for (int n : adjacentOF[D(i)])
                 {
-                    if(normal.dot(F_normals.row(n))<0)
+                    if (normal.dot(F_normals.row(n)) < 0)
                     {
-                        Vector3d c(0.,0.,0.);
-                        for(int m:adjacentO[D(i)])
+                        Vector3d c(0., 0., 0.);
+                        for (int m : adjacentO[D(i)])
                             c += Vo.row(m);
-                        Vo.row(D(i)) = c / (double) adjacentO[D(i)].size();
+                        Vo.row(D(i)) = c / (double)adjacentO[D(i)].size();
                         fixed = true;
                         break;
                     }
@@ -412,27 +413,34 @@ public:
             return fixed;
         };
 
-        function<bool()> FixDegen = [&]()->bool
+        function<bool()> FixDegen = [&]() -> bool
         {
             bool fixed(false);
             set<int> chk;
             VectorXd WV = GetSmoothW(SHOULDER);
-            for(int i=0;i<D.rows();i++) chk.insert(D(i));
-            for(int i=0;i<Fo.rows();i++)
+            for (int i = 0; i < D.rows(); i++)
+                chk.insert(D(i));
+            for (int i = 0; i < Fo.rows(); i++)
             {
-                if(chk.find(Fo(i, 0))==chk.end()) continue;
-                if(chk.find(Fo(i, 1))==chk.end()) continue;
-                if(chk.find(Fo(i, 2))==chk.end()) continue;
-                if(WV(Fo(i, 0))+WV(Fo(i, 1))+WV(Fo(i, 2))<0.1) continue;
-                Vector3d a = (Vo.row(Fo(i,0))-Vo.row(Fo(i, 1))).normalized();
-                Vector3d b = (Vo.row(Fo(i,1))-Vo.row(Fo(i, 2))).normalized();
-                Vector3d c = (Vo.row(Fo(i,2))-Vo.row(Fo(i, 0))).normalized();
-                if(c.dot(-a)<0.95 && a.dot(-b)<0.95 && b.dot(-c)<0.95)  continue;
-                for(int j=0;j<3; j++)
+                if (chk.find(Fo(i, 0)) == chk.end())
+                    continue;
+                if (chk.find(Fo(i, 1)) == chk.end())
+                    continue;
+                if (chk.find(Fo(i, 2)) == chk.end())
+                    continue;
+                if (WV(Fo(i, 0)) + WV(Fo(i, 1)) + WV(Fo(i, 2)) < 0.1)
+                    continue;
+                Vector3d a = (Vo.row(Fo(i, 0)) - Vo.row(Fo(i, 1))).normalized();
+                Vector3d b = (Vo.row(Fo(i, 1)) - Vo.row(Fo(i, 2))).normalized();
+                Vector3d c = (Vo.row(Fo(i, 2)) - Vo.row(Fo(i, 0))).normalized();
+                if (c.dot(-a) < 0.95 && a.dot(-b) < 0.95 && b.dot(-c) < 0.95)
+                    continue;
+                for (int j = 0; j < 3; j++)
                 {
-                    Vector3d cc(0.,0.,0.);
-                    for(int n:adjacentO[Fo(i, j)]) cc += Vo.row(n);
-                    Vo.row(Fo(i, j)) = Vo.row(Fo(i, j))*0.3 + cc.transpose()/(double)adjacentO[Fo(i, j)].size()*0.7;
+                    Vector3d cc(0., 0., 0.);
+                    for (int n : adjacentO[Fo(i, j)])
+                        cc += Vo.row(n);
+                    Vo.row(Fo(i, j)) = Vo.row(Fo(i, j)) * 0.3 + cc.transpose() / (double)adjacentO[Fo(i, j)].size() * 0.7;
                 }
                 fixed = true;
             }
@@ -443,6 +451,8 @@ public:
         {
             bool fixed = false;
             cout << "[fix RST intersection]" << flush;
+            int cnt(0);
+            vector<int> Fvec1;
             while (1)
             {
                 V_normalsO = GetNormal(Vo, Fo);
@@ -457,10 +467,13 @@ public:
                 sort(Fvec.begin(), Fvec.end());
                 Fvec.erase(unique(Fvec.begin(), Fvec.end()), Fvec.end());
                 //vector<int> sVec;
+                MatrixXi FF1 = igl::slice(F, IF.col(1), 1);
+                VectorXi faceVI1(Map<VectorXi>(FF1.data(), FF1.cols() * FF1.rows()));
+                Fvec1.insert(Fvec1.end(), faceVI1.data(), faceVI1.data() + faceVI1.size());
                 for (int i : Fvec)
                 {
                     Vo.row(i) += V_normalsO.row(i) * 0.01;
-                //    sVec.insert(sVec.end(), adjacentO[i].begin(), adjacentO[i].end());
+                    //    sVec.insert(sVec.end(), adjacentO[i].begin(), adjacentO[i].end());
                 }
                 // sort(sVec.begin(), sVec.end());
                 // sVec.erase(unique(sVec.begin(), sVec.end()), sVec.end());
@@ -472,6 +485,22 @@ public:
                 //     c /= (double)adjacentO[i].size();
                 //     Vo.row(i) = Vo.row(i) * 0.7 + c.transpose() * 0.3;
                 // }
+                cnt++;
+                if (cnt == 50)
+                {
+                    sort(Fvec1.begin(), Fvec1.end());
+                    Fvec1.erase(unique(Fvec1.begin(), Fvec1.end()), Fvec1.end());
+
+                    for (int i : Fvec1)
+                    {
+                        Vector3d c(0., 0., 0.);
+                        for (int n : adjacent[i])
+                            c += V.row(n);
+                        c /= (double)adjacent[i].size();
+                        V.row(i) = V.row(i) * 0.5 + c.transpose() * 0.5;
+                    }
+                    return false;
+                }
             }
             cout << " -> 0" << endl;
             return fixed;
@@ -529,9 +558,11 @@ public:
         AdjustVolumeO();
         while (1)
         {
-            if(!FixSelfIntersectionO() && !CheckLayerIntersection() && !CheckRSTIntersection()) break;
+            if (!FixSelfIntersectionO() && !CheckLayerIntersection() && !CheckRSTIntersection())
+                break;
             AdjustVolumeO();
         }
+        return true;
 
         // if (IF.rows())
         // {
@@ -582,7 +613,8 @@ private:
         igl::per_vertex_normals(_V, _F, _F_normals, _V_normals);
         return _V_normals;
     }
-    void ComputeNormal(){
+    void ComputeNormal()
+    {
         MatrixXd _F_normals;
         igl::per_face_normals(V, F, _F_normals);
         igl::per_vertex_normals(V, F, _F_normals, V_normals);
